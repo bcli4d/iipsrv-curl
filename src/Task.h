@@ -38,6 +38,9 @@
 #ifdef HAVE_PNG
 #include "PNGCompressor.h"
 #endif
+#ifdef REMOTE_IO
+#include "CurlIO.h"
+#endif
 
 
 // Define our http header cache max age (24 hours)
@@ -77,7 +80,9 @@ struct Session {
 
   imageCacheMapType *imageCache;
   Cache* tileCache;
-
+#ifdef REMOTE_IO
+  CurlSession* curl;
+#endif
 #ifdef DEBUG
   FileWriter* out;
 #else

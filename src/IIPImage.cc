@@ -36,7 +36,9 @@
 #include <sstream>
 #include <algorithm>
 #include <sys/stat.h>
-
+#ifdef CURL_IO
+#include "CurlImage.h"
+#endif
 
 using namespace std;
 
@@ -85,7 +87,26 @@ void IIPImage::testImageType() throw(file_error)
   string path = fileSystemPrefix + imagePath;
   const char *pstr = path.c_str();
 
+#ifdef CURL_IO
+  if( (CurlImage::stat(pstr,&sb)==0) && S_ISREG(sb.st_mode) ){
 
+    unsigned char header[10];
+
+    // Immediately open our file to reduce (but not eliminate) TOCTOU race condition risks
+    // We should really use open() before fstat() but it's not supported on Windows and
+    // fopen will in any case complain if file no longer readable
+    struct remoteHdl *im = CurlImage::open( pstr, "rb" );
+   
+    if( im == NULL ){
+      string message = "Unable to open file '" + path + "'";
+      throw file_error( message );
+    }
+
+    // Determine our file format using magic file signatures -
+    // read in 10 bytes and immediately close file
+    int len = CurlImage::read( header, 1, 10, im );
+    CurlImage::close( im );
+#else  
   if( (stat(pstr,&sb)==0) && S_ISREG(sb.st_mode) ){
 
     unsigned char header[10];
@@ -93,7 +114,9 @@ void IIPImage::testImageType() throw(file_error)
     // Immediately open our file to reduce (but not eliminate) TOCTOU race condition risks
     // We should really use open() before fstat() but it's not supported on Windows and
     // fopen will in any case complain if file no longer readable
+
     FILE *im = fopen( pstr, "rb" );
+   
     if( im == NULL ){
       string message = "Unable to open file '" + path + "'";
       throw file_error( message );
@@ -103,7 +126,7 @@ void IIPImage::testImageType() throw(file_error)
     // read in 10 bytes and immediately close file
     int len = fread( header, 1, 10, im );
     fclose( im );
-
+endif
     // Make sure we were able to read enough bytes
     if( len < 10 ){
       string message = "Unable to read initial byte sequence from file '" + path + "'";
@@ -183,7 +206,11 @@ void IIPImage::updateTimestamp( const string& path ) throw(file_error)
   // Get a modification time for our image
   struct stat sb;
 
+#ifdef CURL_IO
+  if( CurlImage::stat( path.c_str(), &sb ) == -1 ){
+#else
   if( stat( path.c_str(), &sb ) == -1 ){
+#endif
     string message = string( "Unable to open file " ) + path;
     throw file_error( message );
   }

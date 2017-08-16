@@ -42,7 +42,11 @@ void TPTImage::openImage() throw (file_error)
   updateTimestamp( filename );
 
   // Try to open and allocate a buffer
+#ifdef REMOTE_IO
+  if( ( tiff = curlTIFFOpen( filename.c_str(), "rm" ) ) == NULL ){
+#else
   if( ( tiff = TIFFOpen( filename.c_str(), "rm" ) ) == NULL ){
+#endif
     throw file_error( "tiff open failed for: " + filename );
   }
 

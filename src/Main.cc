@@ -55,6 +55,9 @@
 #include "DSOImage.h"
 #endif
 
+#ifdef REMOTE_IO
+#include "CurlIO.h"
+#endif
 
 // If necessary, define missing setenv and unsetenv functions
 #ifndef HAVE_SETENV
@@ -412,6 +415,11 @@ int main( int argc, char *argv[] )
   Cache tileCache( max_image_cache_size );
   Task* task = NULL;
 
+#ifdef REMOTE_IO
+  //Create a CurlSession object.
+  CurlSession curl;
+#endif
+    
 
 
   /****************
@@ -473,6 +481,9 @@ int main( int argc, char *argv[] )
       session.out = &writer;
       session.watermark = &watermark;
       session.headers.clear();
+#ifdef REMOTE_IO
+      session.curl = &curl;
+#endif
 
       char* header = NULL;
 
@@ -763,6 +774,12 @@ int main( int argc, char *argv[] )
     ///////// End of FCGI_ACCEPT while loop or for loop in debug mode //////////
   }
 
+#ifdef REMOTE_IO
+  //libcurl cleanup
+  delete curl;
+  curl = NULL;
+#endif
+    
 
 
   if( loglevel >= 1 ){
