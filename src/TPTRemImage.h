@@ -31,7 +31,7 @@
 
 
 
-/// Image class for Tiled Pyramidal Images: Inherits from IIPImage. Uses libtiff
+/// Image class for Tiled Pyramidal Images: Inherits from IIPRemImage. Uses libtiff
 class TPTRemImage : public IIPRemImage {
 
  private:
@@ -61,7 +61,7 @@ class TPTRemImage : public IIPRemImage {
   /// Assignment Operator
   /** @param image TPTImage object
    */
-  TPTRemImage& operator = ( TPTImage image ) {
+  TPTRemImage& operator = ( TPTRemImage image ) {
     if( this != &image ){
       closeImage();
       IIPRemImage::operator=(image);

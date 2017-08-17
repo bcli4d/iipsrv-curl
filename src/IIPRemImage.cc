@@ -21,7 +21,7 @@
 */
 
 
-#include "IIPImage.h"
+#include "IIPRemImage.h"
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
@@ -36,9 +36,6 @@
 #include <sstream>
 #include <algorithm>
 #include <sys/stat.h>
-#ifdef CURL_IO
-#include "IIPRemImage.h"
-#endif
 
 using namespace std;
 
@@ -66,7 +63,7 @@ void IIPRemImage::testImageType() throw(file_error)
      * }
      */
 
-     rem_fopen( pstr, "rb" );
+    rem_fopen( pstr, "rb" );
 
     // Determine our file format using magic file signatures -
     // read in 10 bytes and immediately close file
@@ -162,7 +159,7 @@ void IIPRemImage::updateTimestamp( const string& path ) throw(file_error)
 /// Get file status of a possibly remote file.                                           
 int IIPRemImage ::rem_stat(const char *pathname, struct stat *buf) throw(file_error){
   if (stat(pathname, buf) == -1) {
-    if ( (curlStatProc(pathname, buf) == -1)) {
+    if ( (StatProc(pathname, buf) == -1)) {
       return -1;
     }
   }
@@ -239,11 +236,8 @@ TIFF * IIPRemImage::rem_TIFFOpen(const char* filename, const char* mode)
   TIFF *tiff;
   if ( (tiff = TIFFOpen( filename.c_str(), "rm" ) ) == NULL ){
     struct curl_handle *hdl = new curl_handle;
-    hdl->filename = filename;
-    hdl->offset = 0;
-    hdl->curl_handle = curl;
-    hdl->isRemote = true;
-    hdl->local_handle = NULL;
+    isRemote = true;
+    local_handle = NULL;
     tiff = TIFFClientOpen( filename.c_str(), "rm",
 			   (thandle_t)this,
 			   ReadProc,

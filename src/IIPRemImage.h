@@ -91,37 +91,38 @@ class RemIIPImage : public IIPImage {
  public:
 
   /// Default Constructor
-  RemIIPImage() throw (file_error)
+  IIPRemImage() throw (file_error)
    : IIPImage(),
     offset( 0 ),
     isRemote(false),
     local_handle( NULL ) {
     if ( (curl_handle = curl_easy_init()) == NULL){
-      throw file_error("RemIIPImage::RemIIPImage(): curl_easyInit() failed");
+      throw file_error("IIPRemImage::IIpRemImage(): curl_easyInit() failed");
   };
 
   /// Constructer taking the image path as parameter
   /** @param s image path
    */
-  RemIIPImage( const std::string& s ) throw (file_error)
+  IIPRemImage( const std::string& s ) throw (file_error)
    : IIPImage( s ),
     offset( 0 ),
     isRemote(false),
     local_handle( NULL ) {
     if ( (curl_handle = curl_easy_init()) == NULL){
-      throw file_error("RemIIPImage::RemIIPImage(): curl_easyInit() failed");
+      throw file_error("IIPRemImage::IIPRemImage(): curl_easyInit() failed");
     }
   };
 
   /// Copy Constructor taking reference to another IIPImage object
   /** @param im IIPImage object
    */
-  RemIIPImage( const RemIIPImage& image )
+  IIPRemImage( const RemIIPImage& image )
    : IIPImage( image ),
     offset( image.offset ),
     curl_handle( image.curl_handle ),
     isRemote( image.isremote ),
-    local_handle( image.local_handle ) {};
+    local_handle( image.local_handle ) 
+  {};
 
   /// Virtual Destructor
   virtual ~IIPImage() { 
@@ -129,22 +130,19 @@ class RemIIPImage : public IIPImage {
   };
 
   /// Open a possibly remote file.
-  FILE rem_fopen(const char *pathname, const char *mode);
+  int rem_fopen( const char *pathname, const char *mode );
 
   /// Read from a possibly remote file.
-  size_t rem_fread(void *ptr, size_t size, size_t nmemb, CurlImage *stream);
+  size_t rem_fread( void *ptr, size_t size, size_t nmemb );
 
   /// Close a possible remote file.
-  int rem_fclose(CurlImage *stream);
+  int rem_fclose( );
 
   /// Get file status of a possibly remote file.
-  int rem_stat(const char *pathname, struct stat *buf) throw(std::string);
-
-  /// No-op needed by curlStatProc
-  size_t throw_away(void *ptr, size_t size, size_t nmemb, void *data);
+  int rem_stat( const char *pathname, struct stat *buf );
 
   /// "Overload" of libtiff:TIFFOpen 
-  TIFF * rem_TIFFOpen(const char* filename, const char* mode);
+  TIFF * rem_TIFFOpen( const char* filename, const char* mode );
 
 };
 
