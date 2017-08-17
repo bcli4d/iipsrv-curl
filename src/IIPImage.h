@@ -262,6 +262,12 @@ class IIPImage {
   /// Check whether this object has been initialised
   bool set() { return isSet; };
 
+  /// Set isFile
+  void setIsFile( bool isFile);
+
+  ///Get the file system prefix
+  const std::string getFileSystemPrefix() { return fileSystemPrefix; };
+
   /// Set a file system prefix for added security
   void setFileSystemPrefix( const std::string& prefix ) { fileSystemPrefix = prefix; };
 

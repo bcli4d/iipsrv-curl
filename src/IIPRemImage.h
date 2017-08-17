@@ -36,17 +36,19 @@
 #include <map>
 #include <stdexcept>
 #include <tiff.h>
+#include <tiffio.h>
+#include <curl/curl.h>
 #include "RawTile.h"
+#include "IIPImage.h"
 
-
-/// Define our own derived exception class for file errors
-class file_error : public std::runtime_error {
- public:
-  file_error(std::string s) : std::runtime_error(s) { }
+struct MemoryStruct {
+  char *memory;
+  size_t size;
+  size_t buf_size;
 };
 
 
-class RemIIPImage : public IIPImage {
+class IIPRemImage : public IIPImage {
 
  private:
 
@@ -54,7 +56,7 @@ class RemIIPImage : public IIPImage {
   uint offset;
 
   /// libcurl session handle
-  CURL *curl_handle;
+  CURL *curl;
 
   /// True if file is remote
   bool isRemote;
@@ -62,42 +64,46 @@ class RemIIPImage : public IIPImage {
   /// Handle to be used when file is local
   FILE * local_handle;
 
+  /// Private function to determine the image type                                    
+  void testImageType() throw(file_error);
+
   /// Check if a file exists and return its mod time
   int StatProc(const char *pathname, struct stat *buf);
 
   /// curl callback function to copy data from curl buffer to our buffer
-  size_t copy_data(void *buffer, size_t size, size_t nmemb, void *userp);
+  static size_t copy_data(void *buffer, size_t size, size_t nmemb, void *userp);
 
   /// No-op needed by curlStatProc
-  size_t throw_away(void *ptr, size_t size, size_t nmemb, void *data);
+  static size_t throw_away(void *ptr, size_t size, size_t nmemb, void *data);
 
   /// Read from a remote file
-  tmsize_t ReadProc(thandle_t hdl, void * buf, tmsize_t size);
+  static tmsize_t ReadProc(thandle_t hdl, void * buf, tmsize_t size);
 
   /// Write to a remote file
-  tmsize_t WriteProc(thandle_t hdl, void * buf, tmsize_t size);
+  static tmsize_t WriteProc(thandle_t hdl, void * buf, tmsize_t size);
 
   /// Return size of a remote file
-  tmsize_t SizeProc(thandle_t hdl);
+  static toff_t SizeProc(thandle_t hdl);
 
   /// Seek in a remote file
-  toff_t SeekProc(thandle_t hdl, toff_t offset, int whence);
+  static toff_t SeekProc(thandle_t hdl, toff_t offset, int whence);
 
   /// Close a remote file
-  int CloseProc(thandle_t hdl);
+  static int CloseProc(thandle_t hdl);
 
  protected:
 
  public:
 
   /// Default Constructor
-  IIPRemImage() throw (file_error)
+  IIPRemImage( ) throw (file_error)
    : IIPImage(),
     offset( 0 ),
     isRemote(false),
     local_handle( NULL ) {
-    if ( (curl_handle = curl_easy_init()) == NULL){
+    if ( (curl = curl_easy_init()) == NULL){
       throw file_error("IIPRemImage::IIpRemImage(): curl_easyInit() failed");
+    }
   };
 
   /// Constructer taking the image path as parameter
@@ -108,7 +114,7 @@ class RemIIPImage : public IIPImage {
     offset( 0 ),
     isRemote(false),
     local_handle( NULL ) {
-    if ( (curl_handle = curl_easy_init()) == NULL){
+    if ( (curl = curl_easy_init()) == NULL){
       throw file_error("IIPRemImage::IIPRemImage(): curl_easyInit() failed");
     }
   };
@@ -116,18 +122,23 @@ class RemIIPImage : public IIPImage {
   /// Copy Constructor taking reference to another IIPImage object
   /** @param im IIPImage object
    */
-  IIPRemImage( const RemIIPImage& image )
+  IIPRemImage( const IIPRemImage& image )
    : IIPImage( image ),
     offset( image.offset ),
-    curl_handle( image.curl_handle ),
-    isRemote( image.isremote ),
+    curl( image.curl ),
+    isRemote( image.isRemote ),
     local_handle( image.local_handle ) 
   {};
 
   /// Virtual Destructor
-  virtual ~IIPImage() { 
-    delete *curl_handle
+  virtual ~IIPRemImage() { 
+    curl_easy_cleanup(curl);
   };
+
+  /// Get the image timestamp                                                         
+    /** @param s file path                                                              
+     */
+  void updateTimestamp( const std::string& s ) throw( file_error );
 
   /// Open a possibly remote file.
   int rem_fopen( const char *pathname, const char *mode );

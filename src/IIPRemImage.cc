@@ -44,7 +44,7 @@ void IIPRemImage::testImageType() throw(file_error)
   // Check whether it is a regular file
   struct stat sb;
 
-  string path = fileSystemPrefix + imagePath;
+  string path = getFileSystemPrefix() + getImagePath();
   const char *pstr = path.c_str();
 
   if( (rem_stat(pstr,&sb)==0) && S_ISREG(sb.st_mode) ){
@@ -78,7 +78,7 @@ void IIPRemImage::testImageType() throw(file_error)
       throw file_error( message );
     }
 
-    isFile = true;
+    setIsFile( true );
     timestamp = sb.st_mtime;
 
     // Magic file signature for JPEG2000
@@ -103,8 +103,9 @@ void IIPRemImage::testImageType() throw(file_error)
   }
   else{
 
-#ifdef HAVE_GLOB_H
-
+    
+#if 0 // glob not supported   
+    
     // Check for sequence
     glob_t gdat;
     string filename = path + fileNamePattern + "000_090.*";
@@ -144,7 +145,7 @@ void IIPRemImage::testImageType() throw(file_error)
 
 }
 
-void IIPRemImage::updateTimestamp( const string& path ) throw(file_error)
+void IIPRemImage::updateTimestamp( const string& path ) throw( file_error )
 {
   // Get a modification time for our image
   struct stat sb;
@@ -157,7 +158,7 @@ void IIPRemImage::updateTimestamp( const string& path ) throw(file_error)
 }
 
 /// Get file status of a possibly remote file.                                           
-int IIPRemImage ::rem_stat(const char *pathname, struct stat *buf) throw(file_error){
+int IIPRemImage ::rem_stat(const char *pathname, struct stat *buf) {
   if (stat(pathname, buf) == -1) {
     if ( (StatProc(pathname, buf) == -1)) {
       return -1;
@@ -169,7 +170,7 @@ int IIPRemImage ::rem_stat(const char *pathname, struct stat *buf) throw(file_er
 int IIPRemImage::StatProc(const char *pathname, struct stat *buf)
 {
   CURLcode res;
-  long filetime = -1;
+  long file_time = -1;
   double filesize = 0.0;
   //const char *filename = strrchr(ftpurl, '/') + 1;                                     
 
@@ -187,7 +188,7 @@ int IIPRemImage::StatProc(const char *pathname, struct stat *buf)
   res = curl_easy_perform(curl);
 
   if(CURLE_OK == res) {
-    res = curl_easy_getinfo(curl, CURLINFO_FILETIME, &filetime);
+    res = curl_easy_getinfo(curl, CURLINFO_FILETIME, &file_time);
     /*                                                                                   
     if((CURLE_OK == res) && (filetime >= 0)) {                                           
       time_t file_time = (time_t)filetime;                                               
@@ -202,11 +203,11 @@ int IIPRemImage::StatProc(const char *pathname, struct stat *buf)
     */
     if ( ( file_time >= 0 ) && ( filesize > 0.0 ) ){
       /* Assume it'a a regular file */
-      buf->st_mode = I_IFREG;
+      buf->st_mode = S_IFREG;
 
       /* Return filetime as st_mtime */
-      buf->st_mtime.tv_sec = file_time;
-      buf->st_mtime.tv_nsec = 0;
+      buf->st_mtime = file_time;
+
       return 0;
     }
     else {
@@ -216,10 +217,9 @@ int IIPRemImage::StatProc(const char *pathname, struct stat *buf)
   else {
     /* we failed */
     // fprintf(stderr, "curl told us %d\n", res);
-    return -1
-      }
-  return 0;
+    return -1;
   }
+}
 
 size_t IIPRemImage::throw_away(void *ptr, size_t size, size_t nmemb, void *data)
 {
@@ -234,17 +234,16 @@ size_t IIPRemImage::throw_away(void *ptr, size_t size, size_t nmemb, void *data)
 TIFF * IIPRemImage::rem_TIFFOpen(const char* filename, const char* mode)
 {
   TIFF *tiff;
-  if ( (tiff = TIFFOpen( filename.c_str(), "rm" ) ) == NULL ){
-    struct curl_handle *hdl = new curl_handle;
+  if ( (tiff = TIFFOpen( filename, "rm" ) ) == NULL ){
     isRemote = true;
     local_handle = NULL;
-    tiff = TIFFClientOpen( filename.c_str(), "rm",
+    tiff = TIFFClientOpen( filename, "rm",
 			   (thandle_t)this,
 			   ReadProc,
 			   WriteProc,
 			   SeekProc,
-			   SizeProc,
 			   CloseProc,
+			   SizeProc,
 			   NULL, /* no mapproc */
 			   NULL /* no unmapproc */);
   }
@@ -252,36 +251,37 @@ TIFF * IIPRemImage::rem_TIFFOpen(const char* filename, const char* mode)
 }
 
 /// Read from a remote file                                                             
-tmsize_t IIPRemImage::ReadProc(thandle_t hdl, void * buf, tmsize_t size)
+tsize_t IIPRemImage::ReadProc(thandle_t hdl, tdata_t buf, tsize_t size)
 {
   CURLcode res;
   ssize_t rsize;
-  curl_handle * hdl = (curl_handle*)hdl;
+  IIPRemImage *im = (IIPRemImage*)hdl;
   char range[256];
+  const char * pathname = (im->getFileSystemPrefix()+im->getImagePath()).c_str();
 
   struct MemoryStruct chunk;
 
-  chunk.memory = buf;  /* copy to this buffer */
+  chunk.memory = (char*)buf;  /* copy to this buffer */
   chunk.size = 0;    /* no data at this point */
   chunk.buf_size = size;
 
   /* Generate range string*/
-  sprintf(range,"%d-%ld",hdl->offset, hdl->offset+size-1);
+  sprintf(range,"%d-%ld",im->offset, im->offset+size-1);
 
   /* specify URL to get */
-  curl_easy_setopt(hdl->curl_handle, CURLOPT_URL, hdl->imagePath);
+  curl_easy_setopt(im->curl, CURLOPT_URL, pathname);
 
   /* Set the range of bytes to read */
-  curl_easy_setopt(hdl->curl_handle, CURLOPT_RANGE, range);
+  curl_easy_setopt(im->curl, CURLOPT_RANGE, range);
 
   /* send all data to this function  */
-  curl_easy_setopt(hdl->curl_handle, CURLOPT_WRITEFUNCTION, copy_data);
+  curl_easy_setopt(im->curl, CURLOPT_WRITEFUNCTION, copy_data);
 
   /* we pass our 'chunk' struct to the callback function */
-  curl_easy_setopt(hdl->curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+  curl_easy_setopt(im->curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
   /* Perform the request */
-  res = curl_easy_perform(hdl->curl_handle);
+  res = curl_easy_perform(im->curl);
 
   /* check for errors */
   if(res != CURLE_OK) {
@@ -292,102 +292,13 @@ tmsize_t IIPRemImage::ReadProc(thandle_t hdl, void * buf, tmsize_t size)
   else {
     printf("%lu bytes retrieved\n", (long)chunk.size);
     //    print_bytes(buf, chunk.size);                                                 
-    hdl->offset = hdl->offset+chunk.size;
+    im->offset = im->offset+chunk.size;
     return chunk.size;
   }
 }
 
-/// Write to a remote file                                                              
-tmsize_t IIPRemImage::WriteProc(thandle_t hdl, void * buf, tmsize_t size)
-{
-  fprintf(stderr, "write() not supported for remote files\n");
-  return -1;
-}
-
-/// Return size of a remote file                                                        
-tmsize_t IIPRemImage::SizeProc(thandle_t hdl)
-{
-  fprintf(stderr, "size() not supported for remote filess\n");
-  return -1;
-}
-
-/// Seek in a remote file                                                               
-toff_t IIPRemImage::SeekProc(thandle_t hdl, toff_t offset, int whence)
-{
-  curl_handle * hdl = (curl_handle*)hdl;
-  tmsize_t size;
-  toff_t res;
-
-  switch (whence){
-  case SEEK_SET:
-    hdl->offset = offset;
-    break;
-  case SEEK_CUR:
-    hdl->offset += offset;
-    break;
-  case SEEK_END:
-    if ( (size = _size(hdl) ) < 0) {
-      fprintf(stderr, "Seek mode SEEK_END not supported");
-      return -1;
-    }
-  default:
-    fprintf(stderr, "Seek mode %d undefined", whence);
-    return -1;
-  }
-  return hdl->offset;
-}
-
-/// Close a remote file                                                                 
-int  IIPRemImage::CloseProc(thandle_t hdl)
-{
-  delete *(curl_handle *)hdl;
-  return 0;
-}
-
-/// Open a possibly remote file.                                                         
-FILE IIPRemImage::rem_fopen(const char *pathname, const char *mode){
-  FILE *f;
-  if ( ( im = fopen( pstr, "rb" )) != NULL){
-    hdl->isRemote = false;
-    hdl->local_handle = im;
-  }
-  else {
-    /*                                                                                   
-     * If file is remote we don't actually open it. Presumably the file exists 
-     * remotely	or the previous call to rem_stat() would have failed and 
-     * we would not have gotten here.
-     */
-    hdl->imagePath = pathname;
-    hdl->offset = 0;
-    hdl->curl_handle = curl_handle;
-    hdl->isRemote = true;
-  }
-  return 0;
-}
-
-/// Read from a possibly remote file.                                                    
-size_t IIPRemImage::rem_fread(void *ptr, size_t size, size_t nmemb){
-  if (isRemote) {
-    return std:fread(ptr, size, nmemb, local_handle);
-  }
-  else {
-    return curlReadProc( thandle_t stream, ptr, nmemb*size );
-  }
-
-}
-
-/// Close a possible remote file.                                                        
-int IIPRemImage::rem_fclose( ){
-  int res = 0;
-  if (isRemote) {
-    res =  fclose(local_handle);
-  }
-  /* No close in the case of a remote file */
-  delete *stream;
-}
-
 /// curl callback function to copy data from curl buffer to our buffer                  
-size_t IIPImage::copy_data(void *buffer, size_t size, size_t nmemb, void *userp)
+size_t IIPRemImage::copy_data(void *buffer, size_t size, size_t nmemb, void *userp)
 {
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
@@ -403,3 +314,87 @@ size_t IIPImage::copy_data(void *buffer, size_t size, size_t nmemb, void *userp)
   return realsize;
 }
 
+/// Write to a remote file                                                              
+tmsize_t IIPRemImage::WriteProc(thandle_t hdl, void * buf, tmsize_t size)
+{
+  fprintf(stderr, "write() not supported for remote files\n");
+  return -1;
+}
+
+/// Return size of a remote file                                                        
+toff_t IIPRemImage::SizeProc(thandle_t hdl)
+{
+  fprintf(stderr, "size() not supported for remote filess\n");
+  return -1;
+}
+
+/// Seek in a remote file                                                               
+toff_t IIPRemImage::SeekProc(thandle_t hdl, toff_t offset, int whence)
+{
+  IIPRemImage *im = (IIPRemImage*)hdl;
+  tmsize_t size;
+  toff_t res;
+
+  switch (whence){
+  case SEEK_SET:
+    im->offset = offset;
+    break;
+  case SEEK_CUR:
+    im->offset += offset;
+    break;
+  case SEEK_END:
+    fprintf(stderr, "Seek mode SEEK_END not supported");
+    return -1;
+  default:
+    fprintf(stderr, "Seek mode %d undefined", whence);
+    return -1;
+  }
+  return im->offset;
+}
+
+/// Close a remote file                                                                 
+int  IIPRemImage::CloseProc(thandle_t hdl)
+{
+  /* Basically a no-op */
+  return 0;
+}
+
+/// Open a possibly remote file.                                                         
+int IIPRemImage::rem_fopen(const char *pstr, const char *mode){
+  FILE *im;
+  if ( ( im = fopen( pstr, "rb" )) != NULL){
+    isRemote = false;
+    local_handle = im;
+  }
+  else {
+    /*                                                                                   
+     * If file is remote we don't actually open it. Presumably the file exists 
+     * remotely	or the previous call to rem_stat() would have failed and 
+     * we would not have gotten here.
+     */
+    offset = 0;
+    isRemote = true;
+  }
+  return 0;
+}
+
+/// Read from a possibly remote file.                                                    
+size_t IIPRemImage::rem_fread(void *ptr, size_t size, size_t nmemb){
+  if (!isRemote) {
+    return fread(ptr, size, nmemb, local_handle);
+  }
+  else {
+    return ReadProc( (thandle_t)this, ptr, nmemb*size );
+  }
+
+}
+
+/// Close a possible remote file.                                                        
+int IIPRemImage::rem_fclose( ){
+  int res = 0;
+  if (!isRemote) {
+    res = fclose(local_handle);
+  }
+  /* No close in the case of a remote file */
+  return res;
+}
