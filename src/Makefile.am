@@ -26,8 +26,12 @@ EXTRA_iipsrv_fcgi_SOURCES = DSOImage.h DSOImage.cc KakaduImage.h KakaduImage.cc 
 iipsrv_fcgi_SOURCES = \
 			IIPImage.h \
 			IIPImage.cc \
+			IIPRemImage.h \
+			IIPRemImage.cc \
 			TPTImage.h \
 			TPTImage.cc \
+			TPTRemImage.h \
+			TPTRemImage.cc \
 			JPEGCompressor.h \
 			JPEGCompressor.cc \
 			RawTile.h \
