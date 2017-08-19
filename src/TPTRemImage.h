@@ -56,7 +56,7 @@ class TPTRemImage : public IIPRemImage {
   /// Copy Constructor
   /** @param image IIPImage object
    */
-  TPTRemImage( const TPTImage& image ): IIPRemImage( image ), tiff( NULL ),tile_buf( NULL ) {};
+  TPTRemImage( const TPTRemImage& image ): IIPRemImage( image ), tiff( NULL ),tile_buf( NULL ) {};
 
   /// Assignment Operator
   /** @param image TPTImage object

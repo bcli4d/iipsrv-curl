@@ -263,7 +263,7 @@ class IIPImage {
   bool set() { return isSet; };
 
   /// Set isFile
-  void setIsFile( bool isFile);
+  void setIsFile( bool is){ isFile = is; };
 
   ///Get the file system prefix
   const std::string getFileSystemPrefix() { return fileSystemPrefix; };
